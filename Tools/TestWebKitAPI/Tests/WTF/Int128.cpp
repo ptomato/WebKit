@@ -31,6 +31,15 @@
 
 namespace TestWebKitAPI {
 
+static_assert(sizeof(double) * std::numeric_limits<unsigned char>::digits == 64, "these tests assume 64-bit double");
+
+static constexpr double maxSafeInteger = 0x1.fffffffffffffp+52; // last floating point value that corresponds to only one integer
+static constexpr int64_t maxSafeInteger64 = 9007199254740991;
+static constexpr double lastBeforeMaxInt64 = 9.223372036854775e+18;    // last distinct double value before INT64_MAX
+static constexpr double lastBeforeMaxUInt64 = 1.844674407370955e+19;   // last distinct double value before UINT64_MAX
+static constexpr double lastBeforeMaxInt128 = 1.7014118346046921e+38;  // same but for int128_t
+static constexpr double lastBeforeMaxUInt128 = 3.4028236692093843e+38; // ditto
+
 template <typename T>
 class WTF_UInt128IntegerTraitsTest : public ::testing::Test {
 };
@@ -1361,6 +1370,136 @@ TEST(WTF_Int128, VsNativeInt128)
     }
 }
 
-#endif
+static void TestFromFloatingPointVsNativeSigned(double x)
+{
+    WTF::Int128Impl m { x };
+    auto n = static_cast<__int128_t>(x);
+    EXPECT_EQ(m, FromNativeInt128(n)) << "converting " << x << " to int128";
+    EXPECT_EQ(ToNativeUInt128(m), n) << "converting " << x << " to int128";
+}
+
+static void TestFromFloatingPointVsNativeUnsigned(double x)
+{
+    WTF::UInt128Impl m { x };
+    auto n = static_cast<__uint128_t>(x);
+    EXPECT_EQ(m, FromNativeUInt128(n)) << "converting " << x << " to uint128";
+    EXPECT_EQ(ToNativeUInt128(m), n) << "converting " << x << " to uint128";
+}
+
+TEST(WTF_Int128, ConversionFromFloatingPointVsNative)
+{
+    TestFromFloatingPointVsNativeSigned(0.0);
+    TestFromFloatingPointVsNativeUnsigned(0.0);
+
+    TestFromFloatingPointVsNativeSigned(1.0 / M_E);
+    TestFromFloatingPointVsNativeUnsigned(1.0 / M_E);
+    TestFromFloatingPointVsNativeSigned(-1.0 / M_E);
+
+    TestFromFloatingPointVsNativeSigned(1.0);
+    TestFromFloatingPointVsNativeUnsigned(1.0);
+    TestFromFloatingPointVsNativeSigned(-1.0);
+
+    TestFromFloatingPointVsNativeSigned(M_PI);
+    TestFromFloatingPointVsNativeUnsigned(M_PI);
+    TestFromFloatingPointVsNativeSigned(-M_PI);
+
+    TestFromFloatingPointVsNativeSigned(maxSafeInteger);
+    TestFromFloatingPointVsNativeUnsigned(maxSafeInteger);
+    TestFromFloatingPointVsNativeSigned(-maxSafeInteger);
+
+    TestFromFloatingPointVsNativeSigned(maxSafeInteger - 1.0);
+    TestFromFloatingPointVsNativeUnsigned(maxSafeInteger - 1.0);
+    TestFromFloatingPointVsNativeSigned(-(maxSafeInteger - 1.0));
+
+    TestFromFloatingPointVsNativeSigned(lastBeforeMaxInt64);
+    TestFromFloatingPointVsNativeUnsigned(lastBeforeMaxInt64);
+    TestFromFloatingPointVsNativeSigned(-lastBeforeMaxInt64);
+    TestFromFloatingPointVsNativeUnsigned(lastBeforeMaxUInt64);
+
+    // positive/negative 2^63 and 2^64
+    TestFromFloatingPointVsNativeSigned(std::pow(2, 63));
+    TestFromFloatingPointVsNativeUnsigned(std::pow(2, 63));
+    TestFromFloatingPointVsNativeSigned(-std::pow(2, 63));
+    TestFromFloatingPointVsNativeUnsigned(std::pow(2, 64));
+
+    // last distinct double value representable below [u]int128max
+    TestFromFloatingPointVsNativeSigned(lastBeforeMaxInt128);
+    TestFromFloatingPointVsNativeUnsigned(lastBeforeMaxInt128);
+    TestFromFloatingPointVsNativeSigned(-lastBeforeMaxInt128);
+    TestFromFloatingPointVsNativeUnsigned(lastBeforeMaxUInt128);
+}
+
+static void TestToFloatingPointVsNativeSigned(__int128_t i, const char* description)
+{
+    EXPECT_EQ(static_cast<double>(i), static_cast<double>(FromNativeInt128(i))) << description;
+}
+
+static void TestToFloatingPointVsNativeUnsigned(__uint128_t i, const char* description)
+{
+    EXPECT_EQ(static_cast<double>(i), static_cast<double>(FromNativeUInt128(i))) << description;
+}
+
+TEST(WTF_Int128, ConversionToFloatingPointVsNative)
+{
+    TestToFloatingPointVsNativeSigned(0, "0");
+    TestToFloatingPointVsNativeUnsigned(0, "0U");
+
+    TestToFloatingPointVsNativeSigned(1, "1");
+    TestToFloatingPointVsNativeUnsigned(1, "1U");
+    TestToFloatingPointVsNativeSigned(-1, "-1");
+
+    TestToFloatingPointVsNativeSigned(42, "42");
+    TestToFloatingPointVsNativeUnsigned(42, "42U");
+    TestToFloatingPointVsNativeSigned(-42, "-42");
+
+    TestToFloatingPointVsNativeSigned(maxSafeInteger64, "max safe integer");
+    TestToFloatingPointVsNativeUnsigned(maxSafeInteger64, "max safe integer unsigned");
+    TestToFloatingPointVsNativeSigned(-maxSafeInteger64, "-max safe integer");
+
+    TestToFloatingPointVsNativeSigned(maxSafeInteger64 - 1, "max safe - 1");
+    TestToFloatingPointVsNativeUnsigned(maxSafeInteger64 - 1, "max safe - 1, unsigned");
+    TestToFloatingPointVsNativeSigned(-(maxSafeInteger64 - 1), "-(max safe - 1)");
+
+    TestToFloatingPointVsNativeSigned(lastBeforeMaxInt64, "last double value < maxint64");
+    TestToFloatingPointVsNativeUnsigned(lastBeforeMaxInt64, "last double value < maxint64, unsigned");
+    TestToFloatingPointVsNativeSigned(-lastBeforeMaxInt64, "last double value > minint64");
+    TestToFloatingPointVsNativeUnsigned(lastBeforeMaxUInt64, "last double value > maxuint64");
+
+    // [u]int64max
+    static constexpr __int128_t maxInt64 = std::numeric_limits<int64_t>::max();
+    static constexpr __int128_t minInt64 = std::numeric_limits<int64_t>::min();
+    static constexpr __uint128_t maxUInt64 = std::numeric_limits<uint64_t>::max();
+    TestToFloatingPointVsNativeSigned(maxInt64, "maxint64");
+    TestToFloatingPointVsNativeUnsigned(maxInt64, "maxint64, unsigned");
+    TestToFloatingPointVsNativeSigned(minInt64, "minint64");
+    TestToFloatingPointVsNativeSigned(maxUInt64, "maxuint64, signed");
+    TestToFloatingPointVsNativeUnsigned(maxUInt64, "maxuint64");
+    TestToFloatingPointVsNativeSigned(-__int128_t { maxUInt64 }, "-maxuint64");
+
+    // one farther away from zero than [u]int64max
+    TestToFloatingPointVsNativeSigned(maxInt64 + 1, "maxint64 + 1");
+    TestToFloatingPointVsNativeUnsigned(maxInt64 + 1, "maxint64 + 1, unsigned");
+    TestToFloatingPointVsNativeSigned(minInt64 - 1, "minint64 - 1");
+    TestToFloatingPointVsNativeSigned(maxUInt64 + 1, "maxuint64 + 1, signed");
+    TestToFloatingPointVsNativeUnsigned(maxUInt64 + 1, "maxuint64 + 1");
+    TestToFloatingPointVsNativeSigned(-__int128_t { maxUInt64 + 1 }, "-(maxuint64 + 1)");
+
+    // last distinct double value representable below [u]int128max
+    TestToFloatingPointVsNativeSigned(lastBeforeMaxInt128, "last double value < maxint128");
+    TestToFloatingPointVsNativeUnsigned(lastBeforeMaxInt128, "last double value < maxint128, unsigned");
+    TestToFloatingPointVsNativeSigned(-lastBeforeMaxInt128, "last double value > minint128");
+    TestToFloatingPointVsNativeUnsigned(lastBeforeMaxUInt128, "last double value < maxuint128");
+
+    // [u]int128max
+    static constexpr __int128_t maxInt128 = std::numeric_limits<__int128_t>::max();
+    static constexpr __int128_t minInt128 = std::numeric_limits<__int128_t>::min();
+    static constexpr __uint128_t maxUInt128 = std::numeric_limits<__uint128_t>::max();
+    TestToFloatingPointVsNativeSigned(maxInt128, "maxint128");
+    TestToFloatingPointVsNativeUnsigned(__uint128_t { maxInt128 }, "maxint128, unsigned");
+    TestToFloatingPointVsNativeSigned(minInt128, "minint128");
+    TestToFloatingPointVsNativeUnsigned(maxUInt128, "maxuint128");
+}
+
+#endif // HAVE(INT128_T)
 
 } // namespace TestWebKitAPI
