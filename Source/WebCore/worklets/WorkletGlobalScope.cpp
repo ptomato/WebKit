@@ -126,6 +126,11 @@ URL WorkletGlobalScope::completeURL(const String& url, ForceUTF8) const
 
 void WorkletGlobalScope::logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, int columnNumber, RefPtr<ScriptCallStack>&& stack)
 {
+    if (UNLIKELY(settingsValues().logsPageMessagesToSystemConsoleEnabled)) {
+        Inspector::ConsoleMessage message{MessageSource::JS, MessageType::Log, MessageLevel::Error, errorMessage, *stack};
+        PageConsoleClient::logMessageToSystemConsole(message);
+    }
+
     if (!m_document || isJSExecutionForbidden())
         return;
     m_document->logExceptionToConsole(errorMessage, sourceURL, lineNumber, columnNumber, WTFMove(stack));
@@ -133,6 +138,9 @@ void WorkletGlobalScope::logExceptionToConsole(const String& errorMessage, const
 
 void WorkletGlobalScope::addConsoleMessage(std::unique_ptr<Inspector::ConsoleMessage>&& message)
 {
+    if (UNLIKELY(settingsValues().logsPageMessagesToSystemConsoleEnabled && message))
+        PageConsoleClient::logMessageToSystemConsole(*message);
+
     if (!m_document || isJSExecutionForbidden() || !message)
         return;
     m_document->addConsoleMessage(makeUnique<Inspector::ConsoleMessage>(message->source(), message->type(), message->level(), message->message(), 0));
