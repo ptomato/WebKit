@@ -429,10 +429,8 @@ void WebAutomationSessionProxy::evaluateJavaScriptFunction(WebCore::PageIdentifi
     JSValueRef exception = nullptr;
     JSGlobalContextRef context = frame->jsContext();
 
-    if (expectsImplicitCallbackArgument) {
-        auto result = m_webFramePendingEvaluateJavaScriptCallbacksMap.add(frameID, Vector<uint64_t>());
-        result.iterator->value.append(callbackID);
-    }
+    auto result = m_webFramePendingEvaluateJavaScriptCallbacksMap.add(frameID, Vector<uint64_t>());
+    result.iterator->value.append(callbackID);
 
     JSValueRef functionArguments[] = {
         toJSValue(context, function),
