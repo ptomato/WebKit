@@ -40,6 +40,7 @@
 #include "JSDOMPromiseDeferred.h"
 #include "JSDOMWindow.h"
 #include "JSEventListener.h"
+#include "JSEventTarget.h"
 #include "JSFetchResponse.h"
 #include "JSIDBSerializationGlobalObject.h"
 #include "JSMediaStream.h"
@@ -717,7 +718,8 @@ JSC::JSGlobalObject* JSDOMGlobalObject::deriveShadowRealmGlobalObject(JSC::JSGlo
     auto proxy = JSGlobalProxy::create(vm, proxyStructure);
     auto wrapper = JSShadowRealmGlobalScope::create(vm, structure, WTFMove(scope), proxy);
 
-    wrapper->setPrototypeDirect(vm, wrapper->objectPrototype());
+    JSC::JSObject* eventTargetPrototype = JSEventTarget::prototype(vm, *wrapper);
+    wrapper->setPrototypeDirect(vm, eventTargetPrototype);
     proxy->setTarget(vm, wrapper);
 
     wrapper->setConsoleClient(domGlobalObject->consoleClient());

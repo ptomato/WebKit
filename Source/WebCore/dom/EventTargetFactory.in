@@ -57,6 +57,7 @@ ServiceWorker
 ServiceWorkerContainer
 ServiceWorkerGlobalScope
 ServiceWorkerRegistration
+ShadowRealmGlobalScope
 SharedWorker
 SharedWorkerGlobalScope
 SourceBuffer conditional=MEDIA_SOURCE

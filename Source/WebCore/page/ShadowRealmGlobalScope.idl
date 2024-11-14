@@ -28,6 +28,6 @@
     JSLegacyParent=JSShadowRealmGlobalScopeBase,
     Global=ShadowRealm,
     LegacyNoInterfaceObject,
-] interface ShadowRealmGlobalScope {
+] interface ShadowRealmGlobalScope : EventTarget {
     readonly attribute ShadowRealmGlobalScope self;
 };

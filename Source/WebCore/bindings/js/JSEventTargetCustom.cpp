@@ -32,6 +32,7 @@
 #include "JSDOMGlobalObjectInlines.h"
 #include "JSDOMWindow.h"
 #include "JSEventListener.h"
+#include "JSShadowRealmGlobalScope.h"
 #include "JSWindowProxy.h"
 #include "JSWorkerGlobalScope.h"
 #include "LocalDOMWindow.h"
@@ -57,6 +58,8 @@ EventTarget* JSEventTarget::toWrapped(VM&, JSValue value)
         return &jsCast<JSDOMWindow*>(asObject(value))->wrapped();
     if (value.inherits<JSWorkerGlobalScope>())
         return &jsCast<JSWorkerGlobalScope*>(asObject(value))->wrapped();
+    if (value.inherits<JSShadowRealmGlobalScope>())
+        return &jsCast<JSShadowRealmGlobalScope*>(asObject(value))->wrapped();
     if (value.inherits<JSEventTarget>())
         return &jsCast<JSEventTarget*>(asObject(value))->wrapped();
     return nullptr;
@@ -69,6 +72,8 @@ JSEventTargetWrapper jsEventTargetCast(VM& vm, JSValue thisValue)
     if (auto* window = toJSDOMGlobalObject<JSDOMWindow>(vm, thisValue))
         return { window->wrapped(), *window };
     if (auto* scope = toJSDOMGlobalObject<JSWorkerGlobalScope>(vm, thisValue))
+        return { scope->wrapped(), *scope };
+    if (auto* scope = toJSDOMGlobalObject<JSShadowRealmGlobalScope>(vm, thisValue))
         return { scope->wrapped(), *scope };
     return { };
 }

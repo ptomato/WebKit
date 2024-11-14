@@ -25,7 +25,10 @@
 
 #pragma once
 
+#include "EventTarget.h"
+#include "EventTargetInterfaces.h"
 #include "JSShadowRealmGlobalScopeBase.h"
+#include "ScriptExecutionContext.h"
 #include <JavaScriptCore/Weak.h>
 #include <memory>
 #include <wtf/RefCounted.h>
@@ -37,7 +40,7 @@ class JSDOMGlobalObject;
 class ScriptExecutionContext;
 class ScriptModuleLoader;
 
-class ShadowRealmGlobalScope : public RefCounted<ShadowRealmGlobalScope> {
+class ShadowRealmGlobalScope : public RefCounted<ShadowRealmGlobalScope>, public EventTarget {
     friend class JSShadowRealmGlobalScopeBase;
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(ShadowRealmGlobalScope);
 
@@ -49,6 +52,9 @@ public:
     ScriptModuleLoader& moduleLoader();
     JSShadowRealmGlobalScopeBase* wrapper();
 
+    using RefCounted::ref;
+    using RefCounted::deref;
+
 protected:
     ShadowRealmGlobalScope(JSDOMGlobalObject*, ScriptModuleLoader*);
 
@@ -57,6 +63,12 @@ private:
     ScriptModuleLoader* m_parentLoader { nullptr };
     JSC::Weak<JSShadowRealmGlobalScopeBase> m_wrapper;
     std::unique_ptr<ScriptModuleLoader> m_moduleLoader;
+
+    // EventTarget.
+    enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::ShadowRealmGlobalScope; }
+    ScriptExecutionContext* scriptExecutionContext() const final { return m_wrapper->scriptExecutionContext(); }
+    void refEventTarget() final { ref(); }
+    void derefEventTarget() final { deref(); }
 };
 
 inline ShadowRealmGlobalScope& ShadowRealmGlobalScope::self()
