@@ -30,4 +30,7 @@
     LegacyNoInterfaceObject,
 ] interface ShadowRealmGlobalScope : EventTarget {
     readonly attribute ShadowRealmGlobalScope self;
+
+    DOMString btoa(DOMString data);
+    ByteString atob(DOMString data);
 };

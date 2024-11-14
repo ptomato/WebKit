@@ -55,6 +55,9 @@ public:
     using RefCounted::ref;
     using RefCounted::deref;
 
+    ExceptionOr<String> btoa(const String& stringToEncode);
+    ExceptionOr<String> atob(const String& stringToEncode);
+
 protected:
     ShadowRealmGlobalScope(JSDOMGlobalObject*, ScriptModuleLoader*);
 

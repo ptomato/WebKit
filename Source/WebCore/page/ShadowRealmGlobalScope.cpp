@@ -26,6 +26,7 @@
 #include "config.h"
 #include "ShadowRealmGlobalScope.h"
 
+#include "Base64Utilities.h"
 #include "JSDOMGlobalObject.h"
 #include "JSShadowRealmGlobalScope.h"
 #include "ScriptModuleLoader.h"
@@ -59,5 +60,15 @@ ScriptModuleLoader& ShadowRealmGlobalScope::moduleLoader()
 }
 
 ShadowRealmGlobalScope::~ShadowRealmGlobalScope() = default;
+
+ExceptionOr<String> ShadowRealmGlobalScope::btoa(const String& stringToEncode)
+{
+    return Base64Utilities::btoa(stringToEncode);
+}
+
+ExceptionOr<String> ShadowRealmGlobalScope::atob(const String& stringToEncode)
+{
+    return Base64Utilities::atob(stringToEncode);
+}
 
 } // namespace WebCore
