@@ -738,6 +738,7 @@ bindings/js/JSSVGPathSegCustom.cpp
 bindings/js/JSSVGViewSpecCustom.cpp
 bindings/js/JSServiceWorkerClientCustom.cpp
 bindings/js/JSServiceWorkerGlobalScopeCustom.cpp
+bindings/js/JSShadowRealmGlobalScopeCustom.cpp
 bindings/js/JSShadowRootCustom.cpp
 bindings/js/JSSourceBufferCustom.cpp
 bindings/js/JSStaticRangeCustom.cpp

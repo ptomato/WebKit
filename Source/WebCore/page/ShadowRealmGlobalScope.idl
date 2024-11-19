@@ -33,4 +33,6 @@
 
     DOMString btoa(DOMString data);
     ByteString atob(DOMString data);
+
+    [Custom] undefined queueMicrotask(VoidCallback callback);
 };
