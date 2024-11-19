@@ -35,4 +35,6 @@
     ByteString atob(DOMString data);
 
     [Custom] undefined queueMicrotask(VoidCallback callback);
+
+    [CallWith=CurrentGlobalObject&RelevantGlobalObject] any structuredClone(any value, optional StructuredSerializeOptions options);
 };

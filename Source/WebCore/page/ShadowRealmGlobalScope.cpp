@@ -29,7 +29,9 @@
 #include "Base64Utilities.h"
 #include "JSDOMGlobalObject.h"
 #include "JSShadowRealmGlobalScope.h"
+#include "MessagePort.h"
 #include "ScriptModuleLoader.h"
+#include "SerializedScriptValue.h"
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -69,6 +71,24 @@ ExceptionOr<String> ShadowRealmGlobalScope::btoa(const String& stringToEncode)
 ExceptionOr<String> ShadowRealmGlobalScope::atob(const String& stringToEncode)
 {
     return Base64Utilities::atob(stringToEncode);
+}
+
+ExceptionOr<JSC::JSValue> ShadowRealmGlobalScope::structuredClone(JSDOMGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& relevantGlobalObject, JSC::JSValue value, StructuredSerializeOptions&& options)
+{
+    Vector<Ref<MessagePort>> ports;
+    auto messageData = SerializedScriptValue::create(lexicalGlobalObject, value, WTFMove(options.transfer), ports, SerializationForStorage::No, SerializationContext::WindowPostMessage);
+    if (messageData.hasException())
+        return messageData.releaseException();
+
+    auto disentangledPorts = MessagePort::disentanglePorts(WTFMove(ports));
+    if (disentangledPorts.hasException())
+        return disentangledPorts.releaseException();
+
+    Vector<Ref<MessagePort>> entangledPorts;
+    if (auto* scriptExecutionContext = relevantGlobalObject.scriptExecutionContext())
+        entangledPorts = MessagePort::entanglePorts(*scriptExecutionContext, disentangledPorts.releaseReturnValue());
+
+    return messageData.returnValue()->deserialize(lexicalGlobalObject, &relevantGlobalObject, WTFMove(entangledPorts));
 }
 
 } // namespace WebCore

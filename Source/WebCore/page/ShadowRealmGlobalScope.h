@@ -29,6 +29,7 @@
 #include "EventTargetInterfaces.h"
 #include "JSShadowRealmGlobalScopeBase.h"
 #include "ScriptExecutionContext.h"
+#include "StructuredSerializeOptions.h"
 #include <JavaScriptCore/Weak.h>
 #include <memory>
 #include <wtf/RefCounted.h>
@@ -57,6 +58,7 @@ public:
 
     ExceptionOr<String> btoa(const String& stringToEncode);
     ExceptionOr<String> atob(const String& stringToEncode);
+    ExceptionOr<JSC::JSValue> structuredClone(JSDOMGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& relevantGlobalObject, JSC::JSValue value, StructuredSerializeOptions&& options);
 
 protected:
     ShadowRealmGlobalScope(JSDOMGlobalObject*, ScriptModuleLoader*);
