@@ -31,6 +31,8 @@
 ] interface ShadowRealmGlobalScope : EventTarget {
     readonly attribute ShadowRealmGlobalScope self;
 
+    readonly attribute boolean isSecureContext;
+
     DOMString btoa(DOMString data);
     ByteString atob(DOMString data);
 

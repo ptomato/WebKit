@@ -63,6 +63,10 @@ ScriptModuleLoader& ShadowRealmGlobalScope::moduleLoader()
 
 ShadowRealmGlobalScope::~ShadowRealmGlobalScope() = default;
 
+ExceptionOr<bool> ShadowRealmGlobalScope::isSecureContext() const {
+    return scriptExecutionContext()->isSecureContext();
+}
+
 ExceptionOr<String> ShadowRealmGlobalScope::btoa(const String& stringToEncode)
 {
     return Base64Utilities::btoa(stringToEncode);
