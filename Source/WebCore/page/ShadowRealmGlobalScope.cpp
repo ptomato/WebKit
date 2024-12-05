@@ -67,6 +67,17 @@ ExceptionOr<bool> ShadowRealmGlobalScope::isSecureContext() const {
     return scriptExecutionContext()->isSecureContext();
 }
 
+ExceptionOr<void> ShadowRealmGlobalScope::reportError(JSDOMGlobalObject& globalObject, JSC::JSValue error) {
+    JSC::VM& vm = globalObject.vm();
+    auto* exception = JSC::jsDynamicCast<JSC::Exception*>(error);
+    if (!exception)
+        exception = JSC::Exception::create(vm, error);
+
+    reportException(&globalObject, exception);
+
+    return { };
+}
+
 ExceptionOr<String> ShadowRealmGlobalScope::btoa(const String& stringToEncode)
 {
     return Base64Utilities::btoa(stringToEncode);

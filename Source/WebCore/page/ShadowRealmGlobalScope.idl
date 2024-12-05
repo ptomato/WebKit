@@ -33,10 +33,16 @@
 
     readonly attribute boolean isSecureContext;
 
+    [CallWith=RelevantGlobalObject] undefined reportError(any error);
+
     DOMString btoa(DOMString data);
     ByteString atob(DOMString data);
 
     [Custom] undefined queueMicrotask(VoidCallback callback);
 
     [CallWith=CurrentGlobalObject&RelevantGlobalObject] any structuredClone(any value, optional StructuredSerializeOptions options);
+
+    attribute OnErrorEventHandler onerror;
+    attribute EventHandler onrejectionhandled;
+    attribute EventHandler onunhandledrejection;
 };

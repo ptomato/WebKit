@@ -57,6 +57,7 @@ public:
     using RefCounted::deref;
 
     ExceptionOr<bool> isSecureContext() const;
+    ExceptionOr<void> reportError(JSDOMGlobalObject& globalObject, JSC::JSValue error);
     ExceptionOr<String> btoa(const String& stringToEncode);
     ExceptionOr<String> atob(const String& stringToEncode);
     ExceptionOr<JSC::JSValue> structuredClone(JSDOMGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& relevantGlobalObject, JSC::JSValue value, StructuredSerializeOptions&& options);
