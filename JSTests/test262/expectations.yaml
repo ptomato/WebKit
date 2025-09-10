@@ -226,9 +226,6 @@ test/built-ins/Temporal/Duration/prototype/total/no-dst-day-length.js:
 test/built-ins/Temporal/Duration/prototype/total/options-read-before-algorithmic-validation.js:
   default: 'Test262Error: Actual [get options.unit, get options.unit.toString, call options.unit.toString] and expected [get options.relativeTo, get options.unit, get options.unit.toString, call options.unit.toString] should have the same contents. all options should be read first'
   strict mode: 'Test262Error: Actual [get options.unit, get options.unit.toString, call options.unit.toString] and expected [get options.relativeTo, get options.unit, get options.unit.toString, call options.unit.toString] should have the same contents. all options should be read first'
-test/built-ins/Temporal/Duration/prototype/total/precision-exact-mathematical-values-7.js:
-  default: 'Test262Error: milliseconds=9007199254740992, microseconds=1999 Expected SameValue(«9007199254740992», «9007199254740994») to be true'
-  strict mode: 'Test262Error: milliseconds=9007199254740992, microseconds=1999 Expected SameValue(«9007199254740992», «9007199254740994») to be true'
 test/built-ins/Temporal/Duration/prototype/total/relativeto-propertybag-invalid-offset-string.js:
   default: 'Test262Error: "0" is not a valid offset string Expected a TypeError but got a RangeError'
   strict mode: 'Test262Error: "0" is not a valid offset string Expected a TypeError but got a RangeError'

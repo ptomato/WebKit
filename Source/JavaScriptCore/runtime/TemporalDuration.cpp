@@ -27,6 +27,7 @@
 #include "config.h"
 #include "TemporalDuration.h"
 
+#include "FractionToDouble.h"
 #include "IntlObjectInlines.h"
 #include "JSCInlines.h"
 #include "TemporalObject.h"
@@ -582,40 +583,10 @@ static void appendInteger(JSGlobalObject* globalObject, StringBuilder& builder, 
 }
 
 // https://tc39.es/proposal-temporal/#sec-temporal-totaltimeduration
-static double totalTimeDuration(JSGlobalObject* globalObject, Int128 timeDuration, TemporalUnit unit)
+static double totalTimeDuration(Int128 timeDuration, TemporalUnit unit)
 {
-    VM& vm = globalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     Int128 divisor = lengthInNanoseconds(unit);
-    Int128 quotient = timeDuration / divisor;
-    Int128 remainder = timeDuration % divisor;
-    // Perform long division to calculate the fractional part of the quotient
-    // remainder / n with more accuracy than 64-bit floating point division
-    size_t precision = 50;
-    size_t size = 0;
-    StringBuilder decimalDigits;
-    int32_t digit = 0;
-    int32_t sign = timeDuration < 0 ? -1 : 1;
-    while (remainder && size < precision) {
-        remainder *= 10;
-        digit = (int32_t) (remainder / divisor);
-        remainder = remainder % divisor;
-        appendInteger(globalObject, decimalDigits, std::abs(digit));
-        RETURN_IF_EXCEPTION(scope, { });
-        size++;
-    }
-    StringBuilder result;
-    appendInteger(globalObject, result, static_cast<double>(absInt128(quotient)));
-    RETURN_IF_EXCEPTION(scope, { });
-    result.append('.');
-    result.append(decimalDigits.toString());
-    // NOTE: if result.toString() == 9007199254740992.999,
-    // the result is rounded down to 9007199254740992.
-    // This causes the test262 test
-    // Temporal/Duration/prototype/total/precision-exact-mathematical-values-7.js
-    // to fail when unit=milliseconds, smallerUnit=microseconds, integer=2**53, fraction=1999.
-    return sign * result.toString().toDouble();
+    return fractionToDouble(timeDuration, divisor);
 }
 
 // RoundDuration ( years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds, increment, unit, roundingMode [ , relativeTo ] )
@@ -775,7 +746,7 @@ double TemporalDuration::total(JSGlobalObject* globalObject, JSValue optionsValu
 
     auto internalDuration = toInternalDurationRecordWith24HourDays(globalObject, m_duration);
     RETURN_IF_EXCEPTION(scope, { });
-    RELEASE_AND_RETURN(scope, totalTimeDuration(globalObject, internalDuration.time(), unit));
+    return totalTimeDuration(internalDuration.time(), unit);
 }
 
 String TemporalDuration::toString(JSGlobalObject* globalObject, JSValue optionsValue) const
