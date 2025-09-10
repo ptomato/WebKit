@@ -16,7 +16,7 @@ namespace JSC {
 
 // Return the quotient and remainder of the division.
 static inline std::pair<Int128, Int128> divremInt128(const Int128& numerator,
-    const Int128& denominator)
+    const UInt128& denominator)
 {
     return { numerator / denominator, numerator % denominator };
 }
@@ -185,7 +185,8 @@ double fractionToDouble(const Int128& numerator, const Int128& denominator)
     // When both values can be represented as doubles, use double division to
     // compute the exact result. The result is exact, because double division is
     // guaranteed to return the exact result.
-    if (isSafeInteger(numerator) && isSafeInteger(denominator)) [[likely]]
+    if (isSafeInteger(static_cast<double>(numerator))
+        && isSafeInteger(static_cast<double>(denominator))) [[likely]]
         return static_cast<double>(numerator) / static_cast<double>(denominator);
 
     // Otherwise call into fractionToDoubleSlow() to compute the exact result.
