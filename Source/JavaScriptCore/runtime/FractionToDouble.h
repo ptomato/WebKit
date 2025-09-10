@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "config.h"
 #include <wtf/Int128.h>
 
 namespace JSC {
