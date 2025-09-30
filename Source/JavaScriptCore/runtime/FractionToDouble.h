@@ -36,6 +36,6 @@ static constexpr Int128 absInt128(const Int128& value)
     return value;
 }
 
-double fractionToDouble(const Int128& numerator, const Int128& denominator);
+double fractionToDouble(const Int128& numerator, double denominator);
 
 } // namespace JSC

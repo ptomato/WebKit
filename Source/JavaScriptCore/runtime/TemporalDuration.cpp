@@ -585,7 +585,9 @@ static void appendInteger(JSGlobalObject* globalObject, StringBuilder& builder, 
 // https://tc39.es/proposal-temporal/#sec-temporal-totaltimeduration
 static double totalTimeDuration(Int128 timeDuration, TemporalUnit unit)
 {
-    Int128 divisor = lengthInNanoseconds(unit);
+    double divisor = static_cast<double>(lengthInNanoseconds(unit));
+    // guaranteed, maximum lengthInNanoseconds is 86400e9
+    ASSERT(isSafeInteger(divisor));
     return fractionToDouble(timeDuration, divisor);
 }
 

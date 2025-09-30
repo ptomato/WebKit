@@ -1,197 +1,148 @@
-// Copyright (C) 2023-2025 Mozilla Foundation
-//
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/*
+ * Copyright (C) 2025 Igalia, S.L. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include "config.h"
 #include "FractionToDouble.h"
 
 #include "MathCommon.h"
 
+// The calculations here are based on algorithms from two sources. The second
+// one builds on the first.
+//
+// Shewchuk (1997). Adaptive precision floating-point arithmetic and fast robust
+//   geometric predicates. Discrete & Computational Geometry 18(3), pp. 305–363.
+//   https://doi.org/10.1007/PL00009321
+//
+// Hida, Li, Bailey (2008). Library for double-double and quad-double
+//   arithmetic. Manuscript. https://www.davidhbailey.com/dhbpapers/qd.pdf
+//   and the accompanying QD library https://github.com/BL-highprecision/QD,
+//   which is BSD-licensed.
+
 namespace JSC {
 
-// The following is adapted from
-// https://github.com/mozilla-firefox/firefox/blob/main/js/src/builtin/temporal/Temporal.cpp
-
-// Return the quotient and remainder of the division.
-static inline std::pair<Int128, Int128> divremInt128(const Int128& numerator,
-    const UInt128& denominator)
-{
-    return { numerator / denominator, numerator % denominator };
-}
-
-// Return the real number value of the fraction |numerator / denominator|.
+// Double-double precision floating point number, represented as the unevaluated
+// sum of two doubles. In other words, dd[0] is the double approximation term
+// and dd[1] is the error term.
 //
-// As an optimization we multiply the remainder by 16 when computing the number
-// of digits after the decimal point, i.e. we compute four instead of one bit of
-// the fractional digits. The denominator is therefore required to not exceed
-// 2**(N - log2(16)), where N is the number of non-sign bits in the mantissa.
-static double fractionToDoubleSlow(const Int128& numerator, const Int128& denominator)
+// There are many such representations, but only one is 'normalized' meaning the
+// dd[0] term is the most accurate possible double-precision approximation of
+// the double-double value.
+using DD = std::array<double, 2>;
+
+// Conversion of Int128 to double-double precision floating point. The
+// calculations follow from the definition of hi and lo: hi is the closest
+// double-precision approximation to the exact value (which itself will be a
+// safe integer) and lo is the error term.
+static DD int128ToDD(const Int128& value)
 {
-    ASSERT(denominator > 0, "expected positive denominator");
-    ASSERT(denominator <= (static_cast<Int128>(1) << (std::numeric_limits<Int128>::digits - 4)),
-        "denominator too large");
-
-    auto [quot, rem] = divremInt128(absInt128(numerator), static_cast<UInt128>(denominator));
-
-    // Simple case when no remainder is present.
-    if (!rem) {
-        double sign = numerator < 0 ? -1 : 1;
-        return sign * static_cast<double>(quot);
-    }
-
-    // Significand including the implicit one of IEEE-754 floating point numbers.
-    constexpr uint32_t significandWidthWithImplicitOne = 53;
-
-    // Number of leading zeros for a correctly adjusted significand.
-    constexpr uint32_t significandLeadingZeros = 64 - significandWidthWithImplicitOne;
-
-    // Exponent bias for an integral significand. (`Double::kExponentBias` is the
-    // bias for the binary fraction `1.xyz * 2**exp`. For an integral significand
-    // the significand width has to be added to the bias.)
-    constexpr int32_t exponentBias = ((1U << 10) - 1) + (significandWidthWithImplicitOne - 1);
-
-    // Significand, possibly unnormalized.
-    uint64_t significand = 0;
-
-    // Significand ignored msd bits.
-    uint32_t ignoredBits = 0;
-
-    // Read quotient, from most to least significant digit. Stop when the
-    // significand got too large for double precision.
-    int32_t shift = std::numeric_limits<UInt128>::digits;
-    for (; shift && !ignoredBits; shift -= 4) {
-        uint64_t digit = static_cast<uint64_t>(quot >> (shift - 4)) & 0xf;
-
-        significand = significand * 16 + digit;
-        ignoredBits = significand >> significandWidthWithImplicitOne;
-    }
-
-    // Read remainder, from most to least significant digit. Stop when the
-    // remainder is zero or the significand got too large.
-    int32_t fractionDigit = 0;
-    for (; rem && !ignoredBits; fractionDigit++) {
-        auto [digit, next] = divremInt128(rem * 16, static_cast<UInt128>(denominator));
-        rem = next;
-
-        significand = significand * 16 + static_cast<uint64_t>(digit);
-        ignoredBits = significand >> significandWidthWithImplicitOne;
-    }
-
-    // Unbiased exponent. (`shift` remaining bits in the quotient, minus the
-    // fractional digits.)
-    int32_t exponent = shift - (fractionDigit * 4);
-
-    // Significand got too large and some bits are now ignored. Adjust the
-    // significand and exponent.
-    if (ignoredBits) {
-        //        significand
-        //  ___________|__________
-        // /                      |
-        // [xxx················yyy|
-        //  \_/                \_/
-        //   |                  |
-        // ignoredBits       extraBits
-        //
-        // `ignoredBits` have to be shifted back into the 53 bits of the significand
-        // and `extraBits` has to be checked if the result has to be rounded up.
-
-        // Number of ignored/extra bits in the significand.
-        uint32_t extraBitsCount = 32 - std::countl_zero(ignoredBits);
-        ASSERT(extraBitsCount > 0);
-
-        // Extra bits in the significand.
-        uint32_t extraBits = uint32_t(significand) & ((1 << extraBitsCount) - 1);
-
-        // Move the ignored bits into the proper significand position and adjust the
-        // exponent to reflect the now moved out extra bits.
-        significand >>= extraBitsCount;
-        exponent += extraBitsCount;
-
-        ASSERT(!(significand >> significandWidthWithImplicitOne),
-            "no excess bits in the significand");
-
-        // When the most significant digit in the extra bits is set, we may need to
-        // round the result.
-        uint32_t msdExtraBit = extraBits >> (extraBitsCount - 1);
-        if (msdExtraBit) {
-            // Extra bits, excluding the most significant digit.
-            uint32_t extraBitExcludingMsdMask = (1 << (extraBitsCount - 1)) - 1;
-
-            // Unprocessed bits in the quotient.
-            auto bitsBelowExtraBits = quot & ((1 << shift) - 1);
-
-            // Round up if the extra bit's msd is set and either the significand is
-            // odd or any other bits below the extra bit's msd are non-zero.
-            //
-            // Bits below the extra bit's msd are:
-            // 1. The remaining bits of the extra bits.
-            // 2. Any bits below the extra bits.
-            // 3. Any rest of the remainder.
-            bool shouldRoundUp = (significand & 1)
-                || (extraBits & extraBitExcludingMsdMask)
-                || bitsBelowExtraBits
-                || rem;
-            if (shouldRoundUp) {
-                // Add one to the significand bits.
-                significand += 1;
-
-                // If they overflow, the exponent must also be increased.
-                if ((significand >> significandWidthWithImplicitOne)) {
-                    exponent++;
-                    significand >>= 1;
-                }
-            }
-        }
-    }
-
-    ASSERT(significand > 0, "significand is non-zero");
-    ASSERT(!(significand >> significandWidthWithImplicitOne),
-        "no excess bits in the significand");
-
-    // Move the significand into the correct position and adjust the exponent
-    // accordingly.
-    uint32_t significandZeros = std::countl_zero(significand);
-    if (significandZeros < significandLeadingZeros) {
-        uint32_t shift = significandLeadingZeros - significandZeros;
-        significand >>= shift;
-        exponent += shift;
-    } else if (significandZeros > significandLeadingZeros) {
-        uint32_t shift = significandZeros - significandLeadingZeros;
-        significand <<= shift;
-        exponent -= shift;
-    }
-
-    // Combine the individual bits of the double value and return it.
-    constexpr uint64_t signBitShift = 63;
-    constexpr uint64_t exponentBitShift = static_cast<uint64_t>(significandWidthWithImplicitOne - 1);
-
-    uint64_t signBit = static_cast<uint64_t>(numerator < static_cast<Int128>(0) ? 1 : 0)
-        << signBitShift;
-    uint64_t exponentBits = static_cast<uint64_t>(exponent + exponentBias)
-        << exponentBitShift;
-    uint64_t significandBits = significand & ((static_cast<uint64_t>(1) << exponentBitShift) - 1);
-    return std::bit_cast<double>(signBit | exponentBits | significandBits);
+    double hi = static_cast<double>(value);
+    double lo = static_cast<double>(value - static_cast<Int128>(hi));
+    return { hi, lo };
 }
 
-double fractionToDouble(const Int128& numerator, const Int128& denominator)
+// Computes double-double precision a + b of two doubles a and b. This is the
+// Two-Sum algorithm in theorem 7 of the Shewchuk paper.
+static DD ddSum(double a, double b)
+{
+    // First compute the double-precision approximation of the sum by regular
+    // double addition.
+    double sum = a + b;
+
+    // Compute the error term.
+    double bVirtual = sum - a;
+    double aVirtual = sum - bVirtual;
+    double bRoundoff = b - bVirtual;
+    double aRoundoff = a - aVirtual;
+    double error = aRoundoff + bRoundoff;
+
+    return { sum, error };
+}
+
+// Computes double-double precision a * b of two doubles a and b. The
+// optimization using std::fma() is suggested in section 2 of the Hida-Li-Bailey
+// paper.
+static DD ddProduct(double a, double b)
+{
+    // First compute the double-precision approximation of the product by
+    // regular double multiplication.
+    double product = a * b;
+
+    // On armv8, this emits the fnmsub instruction.
+    // On x86_64, this emits the vfmsub213sd instruction if compiled with SSE
+    // instructions. If not, it calls libm's fma(), which is comparably fast to
+    // using the Two-Product algorithm in theorem 18 of the Shewchuk paper.
+    double error = std::fma(a, b, -product);
+
+    return { product, error };
+}
+
+// Computes double-double precision numerator / denominator, where divisor is a
+// double, and rounds the result to double precision. This is described in
+// section 3.5 of the Hida-Li-Bailey paper.
+static double fractionToDoubleSlow(const Int128& numerator, double denominator)
+{
+    DD ddNumerator = int128ToDD(numerator);
+
+    // Compute a first approximation of the quotient by regular double division.
+    double quotient0 = ddNumerator[0] / denominator;
+
+    // Compute remainder, ddNumerator - quotient0 * denominator.
+    DD product = ddProduct(quotient0, denominator);
+    DD remainder = ddSum(ddNumerator[0], -product[0]);
+    
+    // Compute the next approximation term.
+    double error = remainder[1] + ddNumerator[1] - product[1];
+    double quotient1 = (remainder[0] + error) / denominator;
+
+    // The result is DD { quotient0, quotient1 }. If we wanted double-double
+    // precision here, we would have to use the Fast-Two-Sum algorithm from
+    // theorem 6 of the Shewchuk paper to renormalize the two terms, but since
+    // we only need double precision we can discard the error term.
+    return quotient0 + quotient1;
+}
+
+double fractionToDouble(const Int128& numerator, double denominator)
 {
     ASSERT(denominator > 0);
+    ASSERT(isSafeInteger(denominator));
 
     if (!numerator)
         return 0;
 
-    // When both values can be represented as doubles, use double division to
-    // compute the exact result. The result is exact, because double division is
-    // guaranteed to return the exact result.
-    if (isSafeInteger(static_cast<double>(numerator))
-        && isSafeInteger(static_cast<double>(denominator))) [[likely]]
-        return static_cast<double>(numerator) / static_cast<double>(denominator);
+    // When the denominator is 1, we are just calculating the double
+    // approximation of the numerator.
+    if (denominator == 1)
+        return static_cast<double>(numerator);
 
-    // Otherwise call into fractionToDoubleSlow() to compute the exact result.
+    // When the numerator can be represented exactly as a double the algorithm
+    // collapses to a simple double division.
+    if (isSafeInteger(static_cast<double>(numerator))) [[likely]]
+        return static_cast<double>(numerator) / denominator;
+
+    // Otherwise use double-double precision to compute the result.
     return fractionToDoubleSlow(numerator, denominator);
 }
 
 } // namespace JSC
-
